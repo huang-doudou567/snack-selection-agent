@@ -1,0 +1,73 @@
+# ── 浏览器 Profile（含登录信息） ──
+.jd_playwright_profile/
+.mmb_playwright_profile/
+.jd_pw_profile/
+.chrome_remote_9222_profile/
+.chrome_remote_9223_profile/
+.chrome_remote_9222_diag/
+.jd_cookies*.json
+*.lock.json
+*_state.json
+
+# ── 依赖 ──
+.vendor/
+__pycache__/
+*.pyc
+.uv_tmp/
+
+# ── 日志 ──
+logs/
+*.log
+_debug.log
+*_err.log
+*_out.log
+
+# ── 截图/图像 ──
+*.png
+*.jpg
+mmb_screenshots/
+snapshots/
+layout_checks/
+
+# ── 临时/辅助 ──
+_tmp_*
+_auto_runner.py
+_login_both.py
+_jd_login_now.py
+_status.py
+_debug.log
+*.html
+*.html.bak
+
+# ── 旧版数据（保留主数据文件） ──
+structured_snacks_data_with_random_sales.csv
+raw_listing_*.csv
+jd_comment_debug_*.csv
+integrated_selection_products.before_*.csv
+price_history_before_*.csv
+price_history_bad_*.csv
+price_history_coupon_*.csv
+price_history_old_format_*.csv
+price_history_no_detail_*.csv
+price_history_smoke.csv
+crawled_price_items_bad_*.csv
+crawled_price_items_before_*.csv
+crawled_price_items_coupon_*.csv
+crawled_price_items_no_detail_*.csv
+crawled_price_items_smoke.csv
+product_details_probe.csv
+product_details_smoke.csv
+product_details_test.csv
+negative_reviews_probe.csv
+negative_reviews_smoke.csv
+negative_reviews_test.csv
+jd_snacks_2026-05-17_current/
+jd_snacks_2026-05-18_integrated/
+jd_snacks_market_insight/
+数据/
+
+# ── 系统 ──
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

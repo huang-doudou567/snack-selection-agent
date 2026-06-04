@@ -1,0 +1,19 @@
+爬虫数据质量巡检
+生成时间: 2026-05-21 15:47:05
+
+进程状态:
+- 未发现京东评论或慢慢买价格爬取进程
+
+京东评论/详情:
+- checkpoint: exists, rows=296 path=C:\Users\HUAWEI\Documents\New project 2\数据\京东评论爬取\crawled_items.csv
+  status={'success': 259, 'access_blocked': 37}
+- details: exists, rows=259 path=C:\Users\HUAWEI\Documents\New project 2\数据\京东评论爬取\product_details.csv
+- reviews: exists, rows=1584 path=C:\Users\HUAWEI\Documents\New project 2\数据\京东评论爬取\product_reviews.csv
+- negative_reviews: exists, rows=609 path=C:\Users\HUAWEI\Documents\New project 2\数据\京东评论爬取\negative_reviews.csv
+- checks: {'好评率_nonempty': 259, '评价标签_nonempty': 259, '产地_nonempty': 54, '保质期_nonempty': 226, '配料表_nonempty': 0, '规格_nonempty': 259, 'good_rate_100_ratio': 0.0, 'reviews_nonempty': 1584, 'reviews_unique': 715, 'reviews_duplicate_ratio': 0.5486, 'negative_nonempty': 609, 'negative_unique': 333, 'negative_duplicate_ratio': 0.4532}
+
+慢慢买历史价:
+- price_history: exists, rows=8 path=C:\Users\HUAWEI\Documents\New project 2\price_history.csv
+  status={'success': 8}
+- checkpoint: exists, rows=8 path=C:\Users\HUAWEI\Documents\New project 2\crawled_price_items.csv
+- checks: {'success_rate': 1.0, 'error_rate': 0.0, 'no_result_rate': 0.0, 'current_price_nonempty': 8, 'lowest_price_nonempty': 8, 'lowest_price_25m_nonempty': 0, 'lowest_date_25m_nonempty': 0, 'avg_price_60d_nonempty': 0, 'price_detail_nonempty': 0, 'trend_nonempty': 8}

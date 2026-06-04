@@ -1,0 +1,22 @@
+============================================================
+JD snacks local data integration report
+Generated at: 2026-05-25 10:30:14
+============================================================
+
+Data counts
+- Historical rows: 9282
+- New cleaned listing rows: 4151
+- Matched historical SKUs: 37
+- New-only crawled SKUs: 4114
+- Historical SKUs not covered by this crawl: 9245
+- Merged rows: 13396
+
+Change tracking
+- Change records: 42
+- sales_text_raw: 22
+- current_price: 20
+
+Notes
+- This report uses local CSV files only. No JD page was accessed.
+- product_details.csv is partial and is attached only as optional detail fields.
+- Negative review counts are attached from `数据\京东评论爬取\negative_reviews.csv` with 923 rows.

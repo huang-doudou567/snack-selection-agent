@@ -1,0 +1,107 @@
+{
+  "generated_at": "2026-06-01 11:08:54",
+  "output_products": "integrated_selection_products.csv",
+  "row_count": 13400,
+  "unique_sku_count": 13400,
+  "duplicate_sku_count": 0,
+  "source_rows": {
+    "structured": {
+      "path": "C:\\Users\\HUAWEI\\Documents\\New project 2\\structured_snacks_data_with_random_sales.csv",
+      "rows": 9282
+    },
+    "merged": {
+      "path": "C:\\Users\\HUAWEI\\Documents\\New project 2\\merged_products.csv",
+      "rows": 13396
+    },
+    "details": {
+      "path": "C:\\Users\\HUAWEI\\Documents\\New project 2\\数据\\京东评论爬取\\product_details.csv",
+      "rows": 423
+    },
+    "reviews": {
+      "path": "C:\\Users\\HUAWEI\\Documents\\New project 2\\数据\\京东评论爬取\\product_reviews.csv",
+      "rows": 3034
+    },
+    "negative": {
+      "path": "C:\\Users\\HUAWEI\\Documents\\New project 2\\数据\\京东评论爬取\\negative_reviews.csv",
+      "rows": 1227
+    },
+    "checkpoint": {
+      "path": "C:\\Users\\HUAWEI\\Documents\\New project 2\\数据\\京东评论爬取\\crawled_items.csv",
+      "rows": 480
+    },
+    "price_history": {
+      "path": "C:\\Users\\HUAWEI\\Documents\\New project 2\\price_history.csv",
+      "rows": 579
+    }
+  },
+  "coverage": {
+    "title": {
+      "nonempty": 13400,
+      "coverage": 1.0
+    },
+    "brand": {
+      "nonempty": 13400,
+      "coverage": 1.0
+    },
+    "category": {
+      "nonempty": 13400,
+      "coverage": 1.0
+    },
+    "category_recognized": {
+      "nonempty": 13400,
+      "coverage": 1.0
+    },
+    "price": {
+      "nonempty": 13302,
+      "coverage": 0.9927
+    },
+    "weight": {
+      "nonempty": 9534,
+      "coverage": 0.7115
+    },
+    "unit_price_valid": {
+      "nonempty": 9432,
+      "coverage": 0.7039
+    },
+    "flavor": {
+      "nonempty": 367,
+      "coverage": 0.0274
+    },
+    "package_type": {
+      "nonempty": 78,
+      "coverage": 0.0058
+    },
+    "jd_reviews": {
+      "nonempty": 423,
+      "coverage": 0.0316
+    },
+    "jd_negative_reviews": {
+      "nonempty": 280,
+      "coverage": 0.0209
+    },
+    "mmb_price_history": {
+      "nonempty": 319,
+      "coverage": 0.0238
+    }
+  },
+  "quality_flags": {
+    "missing_sku": 0,
+    "missing_title": 0,
+    "missing_category": 0,
+    "invalid_price": 98,
+    "invalid_weight": 3877,
+    "extreme_price_over_1000": 31,
+    "extreme_weight_over_10000g": 9,
+    "duplicate_title_price_weight": 759
+  },
+  "jd_status_counts": {
+    "success": 90,
+    "access_blocked": 3,
+    "captcha_timeout": 1
+  },
+  "mmb_status_counts": {
+    "success": 339,
+    "no_result": 220,
+    "error": 20
+  }
+}
