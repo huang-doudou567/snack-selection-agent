@@ -8,20 +8,56 @@
 
 ## 技术栈
 
-Claude Code + DeepSeek | DrissionPage（反检测内置） | 国内IP裸跑无代理 | CSV输出UTF-8 BOM
+Claude Code + DeepSeek | LangChain Agent | DrissionPage（反检测内置） | 国内IP裸跑无代理 | CSV输出UTF-8 BOM
+
+## 架构
+
+```
+Agent 推理层（Claude Code / LLM）
+    ↕ SKILL.md 编排 + models.py 数据结构
+Python 执行层（确定性脚本）
+    ↕ JSON 磁盘解耦（corpus_cache/）
+数据层（CSV + 实时爬取）
+```
 
 ## 目录结构
 
 ```
 C:\Users\HUAWEI\Documents\New project 2\
-├── merged_products.csv              # 主商品表 13,396行 05-25
-├── integrated_selection_products.csv # 筛选表 13,400行 05-27
-├── snapshots/                       # 周快照 + trend_timeseries.csv
-├── 数据/京东评论抓取/               # 评论CSV，覆盖率3%，crawled_items.csv断点
-├── 数据/price_history.csv           # 慢慢买价格，覆盖率2.1%，crawled_price_items.csv断点
-├── jd_login.py / jd_cdp_review_scraper.py / mmb_price_history_batch.py  # DrissionPage版爬虫
-├── .jd_playwright_profile/          # 京东登录态
-└── .mmb_playwright_profile/         # 慢慢买登录态
+├── SKILL.md                         ← Claude Code Skill 入口（v2 新增）
+├── models.py                        ← 结构化数据模型（v2 新增）
+├── agent_tools.py                   ← Agent 工具集（v2 增强）
+│
+├── scripts/connectors/              ← 数据源统一接口（v2 新增）
+│   └── base.py                      ← Connector ABC + SearchResult
+├── scripts/corpus/
+│   └── store.py                     ← JSON 持久化层（v2 新增）
+│
+├── assets/templates/                ← 6场景输出模板（v2 新增）
+│   ├── clearout.md                  ← 清仓决策
+│   ├── pick.md                      ← 选品蓝海
+│   ├── benchmark.md                 ← 竞品对标
+│   ├── promotion.md                 ← 促销策略
+│   ├── negative_review.md           ← 差评归因
+│   └── sourcing.md                  ← 月度进货
+│
+├── corpus_cache/                    ← 运行时产物（gitignored）
+│
+├── home.py                          # Streamlit 统一入口
+├── snack_strategy_app.py            # 选品策略面板
+├── app.py                           # 单品智能分析
+├── product_assistant.py             # 选品分析引擎
+├── simple_price_compare.py          # 比价核心逻辑
+│
+├── integrated_selection_products.csv # 主商品表 13,400行
+├── merged_products.csv               # 合并表 13,396行
+├── price_history.csv                 # 慢慢买历史价格
+│
+├── jd_cdp_review_scraper.py         # 京东评论爬虫（DrissionPage）
+├── mmb_cdp_price_history_crawler.py  # 慢慢买价格爬虫
+├── crawler_quality_monitor.py        # 爬虫质量巡检
+│
+└── snapshots/                        # 周快照 + trend_timeseries.csv
 ```
 
 ## 爬取安全规则
@@ -50,3 +86,4 @@ C:\Users\HUAWEI\Documents\New project 2\
 - **P0**：慢慢买超时排查 | 验证DrissionPage反检测
 - **P1**：去CDP依赖 | 京东验证码检测逻辑 | 评论→40% | 价格→20%
 - **P2**：分类补全 | 评论去重 | 清理中间文件
+- **v2**：补淘宝/拼多多 Connector | agent_tools 接入真实 LLM 测试 | templates 端到端跑通

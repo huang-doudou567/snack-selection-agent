@@ -55,6 +55,7 @@ def open_login(user_data_dir: str, wait_seconds: int, url: str = JD_LOGIN_URL) -
     co.set_argument("--window-size=1920,1080")
     co.set_argument("--accept-lang=zh-CN,zh;q=0.9")
 
+    co.set_argument("--headless=new")
     co.set_local_port(9516)
 
     page = ChromiumPage(co)

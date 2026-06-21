@@ -273,15 +273,15 @@ def connect_browser_page():
     co.set_argument("--disable-gpu")
     co.set_argument("--disable-software-rasterizer")
     co.set_argument("--accept-lang=zh-CN,zh;q=0.9,en;q=0.8")
+    co.set_argument("--headless=new")
     co.set_local_port(9517)
 
     page = ChromiumPage(co)
-    # 全局超时，防止任何操作无限挂起
     try:
         page.set.timeouts(page_load=15, script=10)
     except Exception:
         pass
-    print(f"[BROWSER] 启动独立 Chrome，Profile: {FALLBACK_PROFILE_DIR}")
+    print(f"[BROWSER] Chrome 已启动（无头模式），Profile: {FALLBACK_PROFILE_DIR}")
     return page
 
 

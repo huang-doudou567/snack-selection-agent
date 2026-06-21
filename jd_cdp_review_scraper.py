@@ -1185,12 +1185,12 @@ def save_all_outputs(
 
 
 def connect_to_chrome() -> ChromiumPage:
-    """启动 Chrome — 极简参数，不触达 JD 反指纹检测。"""
+    """启动 Chrome — headless 模式，不弹窗。"""
     CHROME_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     co = ChromiumOptions()
     co.set_user_data_path(str(CHROME_PROFILE_DIR.resolve()))
-    # 只加必须的参数
     co.set_argument("--no-sandbox")
+    co.set_argument("--headless=new")
     co.set_local_port(9515)
 
     page = ChromiumPage(co)
@@ -1199,7 +1199,7 @@ def connect_to_chrome() -> ChromiumPage:
     except Exception:
         pass
 
-    print(f"[BROWSER] Chrome 已启动，Profile: {CHROME_PROFILE_DIR}")
+    print(f"[BROWSER] Chrome 已启动（无头模式），Profile: {CHROME_PROFILE_DIR}")
     return page
 
 
