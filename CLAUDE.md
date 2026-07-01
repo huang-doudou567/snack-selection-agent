@@ -77,6 +77,26 @@ C:\Users\HUAWEI\Documents\New project 2\
 - 不用CDP，不检测9222端口
 - 反检测试：https://bot.sannysoft.com/
 
+## Streamlit 面板端口
+
+| 端口 | 面板 | 说明 |
+|------|------|------|
+| 8500 | home.py | 统一入口 + 数据仪表板 |
+| 8501 | snack_strategy_app.py | 选品策略面板 |
+| 8502 | app.py | 单品智能分析 |
+| 8503 | prompt_config.py | 6场景 System Prompt 在线编辑 |
+| 8504 | decision_tracker.py | 选品决策追踪 + 3月回看 |
+
+## 对话式 AI 助手
+
+`web-chat/` — SSE 流式聊天界面（基于 your-world-editor 架构复用）
+```bash
+cd web-chat
+cp .env.example .env  # 填入 DEEPSEEK_API_KEY
+npm run dev
+```
+浏览器访问 Vite 端口（默认 5173），直接对话做选品决策。
+
 ## 快照
 
 每周一09:00自动执行，输出 snapshot + changes.md + 更新 trend_timeseries.csv

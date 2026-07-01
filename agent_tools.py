@@ -257,7 +257,10 @@ def category_distribution_insight(query=None, **kwargs):
 
 # ── v2 新增：场景驱动 System Prompts ─────────────────────────────
 
-SCENE_SYSTEM_PROMPTS = {
+_SCENE_PROMPTS_CACHE = None
+_SCENE_PROMPTS_CACHE_TIME = None
+
+_SCENE_DEFAULTS = {
     "clearout": """你是一个帮零食电商用户以最小亏损清理库存的选品 Agent。
 用户场景：仓库压货，需要快速出清。
 你的任务：
@@ -267,7 +270,6 @@ SCENE_SYSTEM_PROMPTS = {
 4. 建议搭配促销手段（满减/优惠券/组合销售）
 5. 每条建议标注数据来源和置信度。
 输出语言：中文。数据不足时明确写出局限性。""",
-
     "pick": """你是一个帮零食电商用户发现蓝海选品机会的 Agent。
 用户场景：想在某品类找到价格带空白并上架新品。
 你的任务：
@@ -277,7 +279,6 @@ SCENE_SYSTEM_PROMPTS = {
 4. 给出上架优先级排序和理由
 5. 每条建议标注数据来源和置信度。
 输出语言：中文。数据不足时明确写出局限性。""",
-
     "benchmark": """你是一个帮零食电商用户做竞品对标的 Agent。
 用户场景：手上有一个商品，想知道能不能跟竞品打、怎么差异化。
 你的任务：
@@ -286,7 +287,6 @@ SCENE_SYSTEM_PROMPTS = {
 3. 给出 3 种差异化定位方案（价格战/品质升级/规格错位）
 4. 每条建议标注数据来源和置信度。
 输出语言：中文。数据不足时明确写出局限性。""",
-
     "promotion": """你是一个帮零食电商用户制定促销策略的 Agent。
 用户场景：大促在即，需要确定折扣力度和促销形式。
 你的任务：
@@ -296,7 +296,6 @@ SCENE_SYSTEM_PROMPTS = {
 4. 建议促销组合（组合销售/加价购/赠品）
 5. 每条建议标注数据来源和置信度。
 输出语言：中文。数据不足时明确写出局限性。""",
-
     "negative_review": """你是一个帮零食电商用户做差评归因和改品建议的 Agent。
 用户场景：商品差评集中爆发，需要找到根因并给出改品方案。
 你的任务：
@@ -306,7 +305,6 @@ SCENE_SYSTEM_PROMPTS = {
 4. 提供客服话术模板（用于回复差评）
 5. 每条建议标注数据来源和置信度。
 输出语言：中文。数据不足时明确写出局限性。""",
-
     "sourcing": """你是一个帮零食电商用户做月度进货决策的 Agent。
 用户场景：月底要定下个月的进货清单，有预算约束。
 你的任务：
@@ -317,6 +315,71 @@ SCENE_SYSTEM_PROMPTS = {
 5. 每条建议标注数据来源和置信度。
 输出语言：中文。数据不足时明确写出局限性。""",
 }
+
+
+def load_scene_prompts(refresh=False):
+    """加载场景提示词——优先读 scene_prompts.json，fallback 到默认值。
+
+    返回 dict: {scene_id: {name, description, prompt}}
+    JSON 被编辑后自动重载（基于文件 mtime）。
+    """
+    global _SCENE_PROMPTS_CACHE, _SCENE_PROMPTS_CACHE_TIME
+
+    prompts_file = PROJECT_DIR / "scene_prompts.json"
+    try:
+        mtime = prompts_file.stat().st_mtime
+        if not refresh and _SCENE_PROMPTS_CACHE is not None and _SCENE_PROMPTS_CACHE_TIME == mtime:
+            return _SCENE_PROMPTS_CACHE
+
+        data = json.loads(prompts_file.read_text(encoding="utf-8"))
+        result = {}
+        for scene_id, item in data.items():
+            result[scene_id] = {
+                "name": item.get("name", scene_id),
+                "description": item.get("description", ""),
+                "prompt": item.get("prompt", ""),
+            }
+        _SCENE_PROMPTS_CACHE = result
+        _SCENE_PROMPTS_CACHE_TIME = mtime
+        return result
+    except Exception:
+        # Fallback 到默认值
+        result = {}
+        for scene_id, prompt_text in _SCENE_DEFAULTS.items():
+            result[scene_id] = {
+                "name": scene_id,
+                "description": "",
+                "prompt": prompt_text,
+            }
+        return result
+
+
+def save_scene_prompt(scene_id: str, prompt_text: str) -> bool:
+    """保存单个场景提示词到 JSON 文件。文件不存在则从默认值创建。"""
+    prompts_file = PROJECT_DIR / "scene_prompts.json"
+    try:
+        current = {}
+        if prompts_file.exists():
+            current = json.loads(prompts_file.read_text(encoding="utf-8"))
+        if scene_id not in current:
+            current[scene_id] = {"name": scene_id, "description": "", "prompt": _SCENE_DEFAULTS.get(scene_id, "")}
+        current[scene_id]["prompt"] = prompt_text
+        prompts_file.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        load_scene_prompts(refresh=True)
+        return True
+    except Exception:
+        return False
+
+
+# 向后兼容：保持 SCENE_SYSTEM_PROMPTS dict 可用
+def _build_scene_dict():
+    d = {}
+    prompts = load_scene_prompts()
+    for scene_id, item in prompts.items():
+        d[scene_id] = item["prompt"]
+    return d
+
+SCENE_SYSTEM_PROMPTS = _build_scene_dict()
 
 
 # ── v2 新增：场景识别 ───────────────────────────────────────────
@@ -470,11 +533,11 @@ def create_llm(backend: str = "claude", temperature: float = 0):
 
 
 def get_system_prompt(scene: str) -> str:
-    """获取场景对应的 System Prompt。"""
-    return SCENE_SYSTEM_PROMPTS.get(
-        scene,
-        SCENE_SYSTEM_PROMPTS["pick"],  # 默认选品
-    )
+    """获取场景对应的 System Prompt（从 scene_prompts.json 或默认值）。"""
+    prompts = load_scene_prompts()
+    if scene in prompts:
+        return prompts[scene]["prompt"]
+    return _SCENE_DEFAULTS.get("pick", "")
 
 
 # ── v2 新增：Agent 初始化（多 LLM） ──────────────────────────────
