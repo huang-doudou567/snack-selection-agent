@@ -1,183 +1,172 @@
-// ── 零食选品 AI 助手 · DeepSeek SSE 代理 ──
+// ── 零食选品 AI 全能服务端 ──
 import 'dotenv/config';
 import express from 'express';
 import type { Request, Response } from 'express';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import OpenAI from 'openai';
 
 const PORT = parseInt(process.env.SERVER_PORT || '3004', 10);
 const API_KEY = process.env.DEEPSEEK_API_KEY;
 const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const PROJECT_DIR = 'C:\\Users\\HUAWEI\\Documents\\New project 2';
 
-if (!API_KEY) { console.error('❌ 缺少 DEEPSEEK_API_KEY'); process.exit(1); }
-
+if (!API_KEY) { console.error('❌ DEEPSEEK_API_KEY missing'); process.exit(1); }
 const client = new OpenAI({ apiKey: API_KEY, baseURL: 'https://api.deepseek.com' });
 
-// ── CSV 数据引擎：启动时一次性加载，缓存所有统计 ──
+// ==================== CSV 引擎 ====================
 
 interface DataCache {
   categories: { name: string; count: number }[];
   brands: { name: string; count: number }[];
-  priceMin: number;
-  priceMax: number;
-  priceAvg: number;
-  totalRows: number;
-  loaded: boolean;
-  csvPath: string;
+  priceMin: number; priceMax: number; priceAvg: number;
+  totalRows: number; loaded: boolean;
+  // Extended data
+  categoryDetails: Record<string, { avgPrice: number; count: number; minPrice: number; maxPrice: number; brands: { name: string; count: number }[] }>;
+  allBrands: { name: string; avgPrice: number; count: number; categories: string[] }[];
+  promotionStats: { hasPromo: number; noPromo: number; promoAvgSales: number; noPromoAvgSales: number; topKeywords: { word: string; count: number }[] };
+  negativeReviewSummary: { categories: { name: string; count: number }[]; total: number };
 }
 
-let dataCache: DataCache = {
-  categories: [], brands: [], priceMin: 0, priceMax: 0, priceAvg: 0,
-  totalRows: 0, loaded: false, csvPath: '',
-};
+const emptyCache = (): DataCache => ({
+  categories: [], brands: [], priceMin: 0, priceMax: 0, priceAvg: 0, totalRows: 0, loaded: false,
+  categoryDetails: {}, allBrands: [], promotionStats: { hasPromo: 0, noPromo: 0, promoAvgSales: 0, noPromoAvgSales: 0, topKeywords: [] },
+  negativeReviewSummary: { categories: [], total: 0 },
+});
 
-function loadCSV(filePath: string): DataCache {
+let DB: DataCache = emptyCache();
+
+function parseCSVLine(line: string): string[] {
+  const r: string[] = []; let c = '', q = false;
+  for (const ch of line) { if (ch === '"') q = !q; else if (ch === ',' && !q) { r.push(c); c = ''; } else c += ch; }
+  r.push(c); return r;
+}
+
+function loadAllData(): DataCache {
   const t0 = Date.now();
+  const csvPath = join(PROJECT_DIR, 'integrated_selection_products.csv');
   try {
-    const raw = readFileSync(filePath, 'utf-8');
+    const raw = readFileSync(csvPath, 'utf-8');
     const lines = raw.split('\n').filter(l => l.trim());
-    if (lines.length < 2) throw new Error('CSV empty');
+    if (lines.length < 2) throw new Error('empty');
+    const h = parseCSVLine(lines[0]);
+    const idxCat = h.indexOf('二级分类'), idxBrand = h.indexOf('品牌'), idxPrice = h.findIndex(c => c === '现价' || c === '价格' || c.replace(/^﻿/,'') === '现价');
+    const idxSales = h.findIndex(c => c.includes('销量') || c.includes('sales'));
+    const idxPromo = h.findIndex(c => c.includes('促销') || c === 'has_promotion' || c.includes('优惠'));
 
-    const headers = parseCSVLine(lines[0]);
-    const catIdx = headers.indexOf('二级分类');
-    const brandIdx = headers.indexOf('品牌');
-    const priceCol = findPriceColumn(headers);
-
-    if (catIdx < 0 && priceCol < 0) throw new Error('Required columns not found');
-
-    const catCounts: Record<string, number> = {};
-    const brandCounts: Record<string, number> = {};
+    const catCount: Record<string, number> = {};
+    const brandCount: Record<string, number> = {};
+    const catPrices: Record<string, number[]> = {};
+    const catBrands: Record<string, Record<string, number>> = {};
+    const brandPrices: Record<string, number[]> = {};
+    const brandCats: Record<string, Set<string>> = {};
     const prices: number[] = [];
-    let validRows = 0;
+    let promoCount = 0, noPromoCount = 0, promoSales = 0, noPromoSales = 0;
+    const promoWords: Record<string, number> = {};
+    let valid = 0;
 
     for (let i = 1; i < lines.length; i++) {
       const cols = parseCSVLine(lines[i]);
-      if (cols.length < Math.max(catIdx, priceCol) + 1) continue;
-      validRows++;
+      if (cols.length < 5) continue;
+      valid++;
 
-      if (catIdx >= 0 && cols[catIdx]) {
-        const cat = cols[catIdx].trim();
-        if (cat) catCounts[cat] = (catCounts[cat] || 0) + 1;
+      const cat = idxCat >= 0 ? cols[idxCat]?.trim() || '' : '';
+      const brand = idxBrand >= 0 ? cols[idxBrand]?.trim() || '' : '';
+      const price = idxPrice >= 0 ? parseFloat(cols[idxPrice]?.replace(/[^\d.]/g, '') || '0') : 0;
+      const sales = idxSales >= 0 ? parseFloat(cols[idxSales]?.replace(/[^\d.]/g, '') || '0') : 0;
+      const promo = idxPromo >= 0 ? (cols[idxPromo]?.includes('True') || cols[idxPromo]?.includes('true') || cols[idxPromo]?.includes('1')) : false;
+
+      if (cat) {
+        catCount[cat] = (catCount[cat] || 0) + 1;
+        (catPrices[cat] ||= []).push(price);
+        const b = brand && brand !== '未知品牌' ? brand : '';
+        if (b) catBrands[cat] = { ...catBrands[cat] || {}, [b]: (catBrands[cat]?.[b] || 0) + 1 };
       }
-      if (brandIdx >= 0 && cols[brandIdx]) {
-        const b = cols[brandIdx].trim();
-        if (b && b !== '未知品牌') brandCounts[b] = (brandCounts[b] || 0) + 1;
+      if (brand && brand !== '未知品牌') {
+        brandCount[brand] = (brandCount[brand] || 0) + 1;
+        (brandPrices[brand] ||= []).push(price);
+        (brandCats[brand] ||= new Set()).add(cat);
       }
-      if (priceCol >= 0 && cols[priceCol]) {
-        const p = parseFloat(cols[priceCol].replace(/[^\d.]/g, ''));
-        if (!isNaN(p) && p > 0 && p < 10000) prices.push(p);
+      if (price > 0 && price < 10000) prices.push(price);
+      if (promo) { promoCount++; if (sales > 0) promoSales += sales; }
+      else { noPromoCount++; if (sales > 0) noPromoSales += sales; }
+      if (promo) {
+        const text = cols.slice(0, 10).join(' ');
+        for (const kw of ['满减', '直降', '优惠券', '包邮', '特价', '买赠', '第二件']) {
+          if (text.includes(kw)) promoWords[kw] = (promoWords[kw] || 0) + 1;
+        }
       }
     }
 
-    const sortTop = (map: Record<string, number>) =>
-      Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([name, count]) => ({ name, count }));
-
     prices.sort((a, b) => a - b);
+    const sortTop = (m: Record<string, number>) => Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([n, c]) => ({ name: n, count: c }));
+    const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
+
+    const categoryDetails: DataCache['categoryDetails'] = {};
+    for (const [name, count] of Object.entries(catCount)) {
+      const ps = catPrices[name] || [];
+      ps.sort((a, b) => a - b);
+      const brands = catBrands[name] || {};
+      categoryDetails[name] = {
+        avgPrice: avg(ps), count, minPrice: ps[0] || 0, maxPrice: ps[ps.length - 1] || 0,
+        brands: Object.entries(brands).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n, c]) => ({ name: n, count: c })),
+      };
+    }
+
+    const allBrands = Object.entries(brandPrices).map(([name, ps]) => ({
+      name, avgPrice: avg(ps), count: brandCount[name],
+      categories: [...(brandCats[name] || new Set())].slice(0, 5),
+    })).sort((a, b) => b.count - a.count);
+
+    const promoKeywords = Object.entries(promoWords).sort((a, b) => b[1] - a[1]).map(([w, c]) => ({ word: w, count: c }));
+
+    // Negative reviews
+    let negTotal = 0;
+    const negCats: Record<string, number> = { '口味': 0, '包装破损': 0, '保质期短': 0, '规格不符': 0, '物流': 0, '其他': 0 };
+    try {
+      const negPath = join(PROJECT_DIR, 'negative_reviews.csv');
+      if (existsSync(negPath)) {
+        const negRaw = readFileSync(negPath, 'utf-8').split('\n').filter(l => l.trim());
+        negTotal = negRaw.length - 1;
+        const negText = negRaw.join(' ');
+        for (const kw of Object.keys(negCats)) {
+          const regex = new RegExp(kw, 'g');
+          const m = negText.match(regex);
+          if (m) negCats[kw] = m.length;
+        }
+      }
+    } catch {}
+
     const result: DataCache = {
-      categories: sortTop(catCounts),
-      brands: sortTop(brandCounts),
-      priceMin: prices[0] || 0,
-      priceMax: prices[prices.length - 1] || 0,
-      priceAvg: Math.round(prices.reduce((s, v) => s + v, 0) / prices.length),
-      totalRows: validRows,
-      loaded: true,
-      csvPath: filePath,
+      categories: sortTop(catCount), brands: sortTop(brandCount),
+      priceMin: prices[0] || 0, priceMax: prices[prices.length - 1] || 0, priceAvg: avg(prices),
+      totalRows: valid, loaded: true,
+      categoryDetails, allBrands,
+      promotionStats: {
+        hasPromo: promoCount, noPromo: noPromoCount,
+        promoAvgSales: promoCount ? Math.round(promoSales / promoCount) : 0,
+        noPromoAvgSales: noPromoCount ? Math.round(noPromoSales / noPromoCount) : 0,
+        topKeywords: promoKeywords,
+      },
+      negativeReviewSummary: {
+        categories: Object.entries(negCats).map(([name, count]) => ({ name, count })),
+        total: negTotal,
+      },
     };
-    console.log(`📊 数据加载完成 (${Date.now() - t0}ms): ${validRows} 行, ${result.categories.length} 品类, ${result.brands.length} 品牌`);
+    console.log(`📊 数据引擎就绪 (${Date.now() - t0}ms): ${valid}行, ${Object.keys(catCount).length}品类, ${Object.keys(brandCount).length}品牌`);
     return result;
   } catch (err) {
-    console.error('CSV 加载失败:', err);
-    return { ...dataCache, loaded: false };
+    console.error('数据加载失败:', err);
+    return emptyCache();
   }
 }
 
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '', inQuotes = false;
-  for (const ch of line) {
-    if (ch === '"') { inQuotes = !inQuotes; }
-    else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
-    else { current += ch; }
-  }
-  result.push(current);
-  return result;
-}
+DB = loadAllData();
 
-function findPriceColumn(headers: string[]): number {
-  for (const name of ['现价', '价格', 'price', '售价']) {
-    const idx = headers.indexOf(name);
-    if (idx >= 0) return idx;
-  }
-  // BOM handling
-  for (let i = 0; i < headers.length; i++) {
-    const h = headers[i].replace(/^﻿/, '');
-    if (h === '现价' || h === '价格') return i;
-  }
-  return -1;
-}
+// ==================== Express ====================
 
-// 查找 CSV 文件
-function findCSV(): string {
-  const candidates = [
-    join(process.env.LOCALAPPDATA || '', '..', 'Documents', 'New project 2', 'integrated_selection_products.csv'),
-    'C:\\Users\\HUAWEI\\Documents\\New project 2\\integrated_selection_products.csv',
-  ];
-  for (const p of candidates) {
-    try { const content = readFileSync(p); console.log('📂 找到 CSV:', p, `(${Math.round(content.length/1024/1024)}MB)`); return p; } catch {}
-  }
-  console.warn('⚠️ 未找到 product CSV');
-  return '';
-}
-
-// 启动时加载
-const csvPath = findCSV();
-if (csvPath) dataCache = loadCSV(csvPath);
-
-// ── 系统提示词 ──
-const SYSTEM_PROMPT = `你是零食电商的AI选品决策助手，为淘宝/京东零食卖家提供数据驱动的选品建议。
-
-## 核心规则
-🔴 先看数据，再给结论。数据充分时直接推荐具体品类、价格带、品牌。
-🔴 给出明确选品意见——不要只说"你可以考虑"，要说"坚果品类80-100元礼盒装最优"。
-🔴 每条建议跟一句证据来源。
-🔴 数据覆盖不足时（品牌未知率>90%），诚实说明局限但不影响给出价格带建议。
-
-## 回复规范
-1. 先用1-2句回应用户需求
-2. 给出2-3条可执行建议，格式：**建议** → 证据 → 局限
-3. 最后给1个最高优先级行动项
-
-## 禁止
-- 不编造品牌名（品牌数据99%缺失，只能基于价格带推荐）
-- 不给模糊建议如"可以试试看"
-- 不输出冗长免责段落——一句"数据局限：xxx"即可
-
-回复语言：简洁中文，每段不超过3行。`;
-
-// ── 上下文：预计算数据 ──
-function buildContextBlock(): string {
-  if (!dataCache.loaded) return `[数据未加载，基于通用知识回答并注明]`;
-
-  const lines = [
-    `[实时数据 · ${dataCache.totalRows}条商品]`,
-    '',
-    '## 品类分布',
-    dataCache.categories.map(c => `  ${c.name}: ${c.count}种`).join('\n'),
-    '',
-    '## 品牌（非"未知品牌"）',
-    dataCache.brands.slice(0, 10).map(b => `  ${b.name}: ${b.count}种`).join('\n'),
-    '',
-    `## 价格概览  最低¥${dataCache.priceMin}  最高¥${dataCache.priceMax}  均价¥${dataCache.priceAvg}`,
-    '',
-    '⚠️ 品牌字段99%为"未知品牌"，无法做品牌级推荐。基于价格带和品类分布给建议。',
-  ];
-  return lines.join('\n');
-}
-
-// ── Express ──
 const app = express();
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '2mb' }));
 app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -185,75 +174,250 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', model: MODEL, provider: 'deepseek', dataLoaded: dataCache.loaded, dataRows: dataCache.totalRows });
+// ── 数据面板 ──
+app.get('/api/data-summary', (_req, res) => res.json({
+  loaded: DB.loaded, totalRows: DB.totalRows,
+  categories: DB.categories, brands: DB.brands,
+  priceMin: DB.priceMin, priceMax: DB.priceMax, priceAvg: DB.priceAvg,
+}));
+
+// ── 品类详情 ──
+app.get('/api/category/:name', (req: Request, res: Response) => {
+  const name = req.params.name;
+  const detail = DB.categoryDetails[name];
+  if (!detail) return res.status(404).json({ error: '品类未找到' });
+  res.json({ name, ...detail });
 });
 
-// 数据面板接口：返回摘要给前端展示
-app.get('/api/data-summary', (_req, res) => {
+// ── 品牌列表 ──
+app.get('/api/brands', (_req, res) => res.json(DB.allBrands.slice(0, 20)));
+
+// ── 比价 ──
+app.get('/api/price/compare', (req: Request, res: Response) => {
+  const brand = (req.query.brand as string) || '';
+  const category = (req.query.category as string) || '';
+  const csvPath = join(PROJECT_DIR, 'integrated_selection_products.csv');
+  try {
+    const raw = readFileSync(csvPath, 'utf-8');
+    const lines = raw.split('\n').filter(l => l.trim());
+    const h = parseCSVLine(lines[0]);
+    const idxBrand = h.indexOf('品牌'), idxCat = h.indexOf('二级分类'), idxPrice = h.findIndex(c => c === '现价' || c.replace(/^﻿/, '') === '现价');
+    const idxTitle = h.findIndex(c => c.includes('名称') || c === 'title');
+    const idxWeight = h.findIndex(c => c.includes('克重') || c.includes('净重') || c.includes('重量'));
+    const idxURL = h.findIndex(c => c.includes('链接') || c.includes('url') || c.includes('URL'));
+
+    const results: any[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      const b = idxBrand >= 0 ? cols[idxBrand]?.trim() || '' : '';
+      const c = idxCat >= 0 ? cols[idxCat]?.trim() || '' : '';
+      if (brand && !b.includes(brand)) continue;
+      if (category && !c.includes(category)) continue;
+      const price = idxPrice >= 0 ? parseFloat(cols[idxPrice]?.replace(/[^\d.]/g, '') || '0') : 0;
+      if (price <= 0) continue;
+      const weight = idxWeight >= 0 ? parseFloat(cols[idxWeight]?.replace(/[^\d.]/g, '') || '0') : 0;
+      results.push({
+        title: idxTitle >= 0 ? cols[idxTitle]?.trim()?.slice(0, 80) || '' : '',
+        brand: b, category: c, price,
+        weight, unitPrice: weight > 0 ? parseFloat((price / weight).toFixed(4)) : 0,
+        url: idxURL >= 0 ? cols[idxURL]?.trim() || '' : '',
+      });
+    }
+    results.sort((a, b) => a.unitPrice - b.unitPrice);
+    res.json({ brand, category, count: results.length, results: results.slice(0, 30) });
+  } catch (err) {
+    res.status(500).json({ error: '查询失败' });
+  }
+});
+
+// ── 产品搜索 ──
+app.get('/api/product/search', (req: Request, res: Response) => {
+  const q = (req.query.q as string) || '';
+  const csvPath = join(PROJECT_DIR, 'integrated_selection_products.csv');
+  try {
+    const raw = readFileSync(csvPath, 'utf-8');
+    const lines = raw.split('\n').filter(l => l.trim());
+    const h = parseCSVLine(lines[0]);
+    const idxTitle = h.findIndex(c => c.includes('名称') || c === 'title');
+    const idxPrice = h.findIndex(c => c === '现价' || c.replace(/^﻿/, '') === '现价');
+    const idxBrand = h.indexOf('品牌'), idxCat = h.indexOf('二级分类');
+
+    const results: any[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      const title = idxTitle >= 0 ? cols[idxTitle]?.trim() || '' : '';
+      if (q && !title.includes(q)) continue;
+      results.push({
+        title: title.slice(0, 80),
+        brand: idxBrand >= 0 ? cols[idxBrand]?.trim() || '' : '',
+        category: idxCat >= 0 ? cols[idxCat]?.trim() || '' : '',
+        price: idxPrice >= 0 ? parseFloat(cols[idxPrice]?.replace(/[^\d.]/g, '') || '0') : 0,
+      });
+      if (results.length >= 50) break;
+    }
+    res.json({ q, count: results.length, results });
+  } catch (err) {
+    res.status(500).json({ error: '搜索失败' });
+  }
+});
+
+// ── 促销统计 ──
+app.get('/api/promotion/stats', (_req, res) => res.json(DB.promotionStats));
+
+// ── 差评摘要 ──
+app.get('/api/reviews/negative', (_req, res) => res.json(DB.negativeReviewSummary));
+
+// ── 清仓定价推算 ──
+app.get('/api/clearance/price', (req: Request, res: Response) => {
+  const category = (req.query.category as string) || '';
+  const detail = category ? DB.categoryDetails[category] : null;
+  if (!detail && category) return res.json({
+    category: '未找到品类，以下是全局建议',
+    plans: [
+      { name: '激进', discount: '60%', estDays: '3-5天', marginLoss: '40%' },
+      { name: '平衡', discount: '75%', estDays: '7-14天', marginLoss: '25%' },
+      { name: '保守', discount: '85%', estDays: '14-30天', marginLoss: '15%' },
+    ],
+  });
+  const avg = detail?.avgPrice || DB.priceAvg;
   res.json({
-    loaded: dataCache.loaded,
-    totalRows: dataCache.totalRows,
-    categories: dataCache.categories,
-    brands: dataCache.brands,
-    priceMin: dataCache.priceMin,
-    priceMax: dataCache.priceMax,
-    priceAvg: dataCache.priceAvg,
+    category: category || '全品类',
+    avgPrice: avg,
+    plans: [
+      { name: '激进', price: Math.round(avg * 0.6), estDays: '3-5天', marginLoss: '40%' },
+      { name: '平衡', price: Math.round(avg * 0.75), estDays: '7-14天', marginLoss: '25%' },
+      { name: '保守', price: Math.round(avg * 0.85), estDays: '14-30天', marginLoss: '15%' },
+    ],
   });
 });
 
+// ── 决策 CRUD ──
+const DECISIONS_PATH = join(PROJECT_DIR, 'selection_decisions.csv');
+app.get('/api/decisions', (_req, res) => {
+  try {
+    if (!existsSync(DECISIONS_PATH)) return res.json([]);
+    const raw = readFileSync(DECISIONS_PATH, 'utf-8');
+    const lines = raw.split('\n').filter(l => l.trim());
+    if (lines.length < 2) return res.json([]);
+    const headers = parseCSVLine(lines[0]);
+    const rows: any[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      const row: any = {};
+      headers.forEach((h, j) => row[h] = cols[j] || '');
+      rows.push(row);
+    }
+    res.json(rows.reverse());
+  } catch { res.json([]); }
+});
+
+app.post('/api/decisions', (req: Request, res: Response) => {
+  const d = req.body;
+  const cols = ['决策时间','场景','品类','品牌','建议摘要','用户选择','置信度','预期效果','实际结果','偏差分析','回看日期','已回看'];
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const review = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+  const row = [now, d.scene || '', d.category || '', d.brand || '', d.advice || '', d.choice || '', d.confidence || '', d.expected || '', '', '', review, '否'];
+  const line = row.map(v => `"${(v || '').replace(/"/g, '""')}"`).join(',');
+  try {
+    if (!existsSync(DECISIONS_PATH)) writeFileSync(DECISIONS_PATH, cols.join(',') + '\n', 'utf-8');
+    writeFileSync(DECISIONS_PATH, readFileSync(DECISIONS_PATH, 'utf-8') + line + '\n', 'utf-8');
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: '保存失败' }); }
+});
+
+app.put('/api/decisions/:index', (req: Request, res: Response) => {
+  const idx = parseInt(req.params.index);
+  const { actual, deviation } = req.body;
+  try {
+    const raw = readFileSync(DECISIONS_PATH, 'utf-8');
+    const lines = raw.split('\n').filter(l => l.trim());
+    if (idx >= lines.length) return res.status(404).json({ error: 'not found' });
+    const headers = parseCSVLine(lines[0]);
+    const cols = parseCSVLine(lines[lines.length - 1 - idx]);
+    const colMap: Record<string, number> = {};
+    headers.forEach((h, j) => colMap[h] = j);
+    if (colMap['实际结果'] !== undefined) cols[colMap['实际结果']] = actual || '';
+    if (colMap['偏差分析'] !== undefined) cols[colMap['偏差分析']] = deviation || '';
+    if (colMap['已回看'] !== undefined) cols[colMap['已回看']] = '是';
+    lines[lines.length - 1 - idx] = cols.map(v => `"${(v || '').replace(/"/g, '""')}"`).join(',');
+    writeFileSync(DECISIONS_PATH, lines.join('\n') + '\n', 'utf-8');
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: '更新失败' }); }
+});
+
+// ── Prompt 配置 ──
+const PROMPTS_PATH = join(PROJECT_DIR, 'scene_prompts.json');
+app.get('/api/prompts', (_req, res) => {
+  try { res.json(JSON.parse(readFileSync(PROMPTS_PATH, 'utf-8'))); }
+  catch { res.json({}); }
+});
+app.put('/api/prompts/:scene', (req: Request, res: Response) => {
+  try {
+    const data = JSON.parse(readFileSync(PROMPTS_PATH, 'utf-8'));
+    data[req.params.scene] = { ...data[req.params.scene], ...req.body };
+    writeFileSync(PROMPTS_PATH, JSON.stringify(data, null, 2), 'utf-8');
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: '保存失败' }); }
+});
+
+// ── Health ──
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', model: MODEL, dataLoaded: DB.loaded, dataRows: DB.totalRows }));
+
+// ── SSE Chat ──
+const SYSTEM_PROMPT = `你是零食电商AI选品助手，为淘宝/京东卖家提供数据驱动建议。
+🔴 先看数据再给结论。给出明确选品意见。每条建议跟证据+局限。
+回复语言：简洁中文，用Markdown格式。`;
+
+function buildContext(): string {
+  if (!DB.loaded) return '';
+  return [
+    `[数据: ${DB.totalRows}条商品 · 均价¥${DB.priceAvg} · ¥${DB.priceMin}-¥${DB.priceMax}]`,
+    '品类TOP5: ' + DB.categories.slice(0, 5).map(c => `${c.name}(${c.count})`).join(', '),
+    '品牌字段99%未知，基于价格带推荐。',
+  ].join('\n');
+}
+
 app.post('/api/chat', async (req: Request, res: Response) => {
-  const { messages } = req.body as { messages: { role: 'user' | 'assistant'; content: string }[] };
+  const { messages } = req.body as { messages: { role: string; content: string }[] };
   if (!messages?.length) { res.status(400).json({ error: 'messages required' }); return; }
 
-  const contextBlock = buildContextBlock();
-
-  // 只发最后6轮对话 + 上下文
-  const recentMessages = messages.slice(-12);
-  const apiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+  const apiMsgs: any[] = [
     { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'system', content: contextBlock },
+    { role: 'system', content: buildContext() },
   ];
-  for (const msg of recentMessages) {
-    apiMessages.push({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: msg.content });
+  const recent = messages.slice(-12);
+  for (const m of recent) {
+    apiMsgs.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content });
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
 
-  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  let hb: any = null;
   try {
     const stream = await client.chat.completions.create({
-      model: MODEL, messages: apiMessages, max_tokens: 2048, temperature: 0.3, stream: true,
+      model: MODEL, messages: apiMsgs, max_tokens: 2048, temperature: 0.3, stream: true,
     });
-    heartbeat = setInterval(() => { try { res.write(': h\n\n'); } catch {} }, 10000);
-    let finishReason = 'stop', inputTokens = 0, outputTokens = 0;
-
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta;
-      if (delta?.content) {
-        res.write(`data: ${JSON.stringify({ type: 'text', text: delta.content })}\n\n`);
-      }
-      if (chunk.choices[0]?.finish_reason) finishReason = chunk.choices[0].finish_reason;
-      if (chunk.usage) { inputTokens = chunk.usage.prompt_tokens; outputTokens = chunk.usage.completion_tokens; }
+    hb = setInterval(() => { try { res.write(': h\n\n'); } catch {} }, 10000);
+    let reason = 'stop', it = 0, ot = 0;
+    for await (const c of stream) {
+      if (c.choices[0]?.delta?.content) res.write(`data: ${JSON.stringify({ type: 'text', text: c.choices[0].delta.content })}\n\n`);
+      if (c.choices[0]?.finish_reason) reason = c.choices[0].finish_reason;
+      if (c.usage) { it = c.usage.prompt_tokens; ot = c.usage.completion_tokens; }
     }
-    if (heartbeat) clearInterval(heartbeat);
-    res.write(`data: ${JSON.stringify({ type: 'done', stop_reason: finishReason, usage: { input_tokens: inputTokens, output_tokens: outputTokens } })}\n\n`);
+    if (hb) clearInterval(hb);
+    res.write(`data: ${JSON.stringify({ type: 'done', stop_reason: reason, usage: { input_tokens: it, output_tokens: ot } })}\n\n`);
     res.end();
-  } catch (error: unknown) {
-    if (heartbeat) clearInterval(heartbeat);
+  } catch (err: any) {
+    if (hb) clearInterval(hb);
     let msg = '未知错误';
-    if (error instanceof OpenAI.AuthenticationError) msg = 'API Key 无效';
-    else if (error instanceof OpenAI.RateLimitError) msg = '速率限制，请稍后重试';
-    else if (error instanceof Error) msg = error.message;
-    console.error('[chat error]', msg);
+    if (err instanceof OpenAI.AuthenticationError) msg = 'API Key 无效';
+    else if (err instanceof OpenAI.RateLimitError) msg = '速率限制';
+    else if (err instanceof Error) msg = err.message;
     res.write(`data: ${JSON.stringify({ type: 'error', message: msg, errorType: 'api_error' })}\n\n`);
     res.end();
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🛒 零食选品 AI 已启动 → http://localhost:${PORT}/api/chat`);
-});
+app.listen(PORT, () => console.log(`🛒 全能服务已启动 → http://localhost:${PORT}`));
