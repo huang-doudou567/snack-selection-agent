@@ -28,7 +28,8 @@ export default function App() {
   const [data, setData] = useState<any>(null)
 
   useEffect(() => {
-    fetch('/api/data-summary').then(r => r.json()).then(setData).catch(() => {})
+    const url = location.hostname === 'localhost' ? '/api/data-summary' : './data-summary.json'
+    fetch(url).then(r => r.json()).then(setData).catch(() => {})
   }, [])
 
   const renderView = () => {
