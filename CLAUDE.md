@@ -20,6 +20,44 @@ Python 执行层（确定性脚本）
 数据层（CSV + 实时爬取）
 ```
 
+## 常用命令
+
+```bash
+# 依赖
+pip install -r requirements.txt
+playwright install chromium              # Playwright 首次运行需装浏览器内核
+
+# 测试（unittest，唯一测试文件）
+python -m unittest test_product_assistant           # 全部
+python -m unittest test_product_assistant.ProductAssistantTest.test_analyze_product_with_structured_corpus  # 单个
+
+# Streamlit 面板（端口见下方表格）
+streamlit run home.py --server.port 8500
+
+# 对话式 AI 助手（web-chat/，前后端一起起）
+cd web-chat && npm install && npm run dev   # tsx server/index.ts + vite，默认 5173；先 cp .env.example .env 填 DEEPSEEK_API_KEY
+```
+
+## 代码架构（关键模块依赖）
+
+单一 Python 包，无框架，模块间直接 import。理解全局的最短路径是这条依赖链：
+
+```
+models.py                    ← 数据契约：Evidence / RawProduct / SelectionAdvice / SelectionReport（dataclass）
+   ↑
+simple_price_compare.py      ← 核心：CSV 加载 + 比价/统计脏活（在 agent_tools 里以别名 app 导入）
+   ↑
+agent_tools.py               ← 6 个 Agent 工具，返回 models 里的 dataclass（不是字符串）；多 LLM 后端 claude→openai→deepseek
+product_assistant.py         ← ProductSelectionAssistant 单品分析引擎（被 app.py 和测试直接用）
+   ↑
+Streamlit 面板：home.py / snack_strategy_app.py(matplotlib) / app.py / prompt_config.py / decision_tracker.py
+```
+
+- **推理层/执行层解耦**：Agent（LLM）只做场景识别与策略文字；Python 脚本做确定性计算。二者只通过 `models.py` 的 dataclass 交换数据 —— 改数据结构就改 `models.py`，别在两侧各写一份。
+- **场景编排在 `SKILL.md`**，不在 Python 里：6 场景→工具组合→`assets/templates/*.md` 的映射是 Skill 层职责；`scene_prompts.json` 存各场景 System Prompt，由 `prompt_config.py`(8503) 在线编辑。
+- **爬虫是独立一层**：`jd_*` / `mmb_*` 脚本各自可单独运行，产物落 CSV，与分析层通过磁盘 CSV 解耦，不被 import。DrissionPage 与 Playwright 两套并存（部分脚本两者都引），不是二选一。
+- **数据 fallback 链**：`integrated_selection_products.csv` → `merged_products.csv` → `final_products.csv`，读不到再报错，绝不编造。
+
 ## 目录结构
 
 ```
