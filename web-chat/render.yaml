@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: snack-selection-api
+    env: node
+    buildCommand: npm install
+    startCommand: npx tsx api/render-server.ts
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        sync: false

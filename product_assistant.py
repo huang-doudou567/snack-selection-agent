@@ -74,21 +74,23 @@ class ProductSelectionAssistant:
         candidates = []
         if data_path:
             candidates.append(Path(data_path).expanduser())
-        candidates.extend(
-            [
-                Path.cwd() / "integrated_selection_products.csv",
-                Path.home() / "Desktop" / "integrated_selection_products.csv",
-                Path.cwd() / "structured_snacks_data_with_random_sales.csv",
-                Path.home() / "Desktop" / "structured_snacks_data_with_random_sales.csv",
-                Path.cwd() / "structured_snacks_data.csv",
-                Path.home() / "Desktop" / "structured_snacks_data.csv",
-            ]
-        )
+        # 绝对路径：项目目录
+        candidates.extend([
+            Path(r"C:\Users\HUAWEI\Documents\New project 2") / "integrated_selection_products.csv",
+            Path(r"C:\Users\HUAWEI\Documents\New project 2") / "structured_snacks_data_with_random_sales.csv",
+            Path(r"C:\Users\HUAWEI\Documents\New project 2") / "structured_snacks_data.csv",
+        ])
+        # cwd fallback
+        candidates.extend([
+            Path.cwd() / "integrated_selection_products.csv",
+            Path.home() / "Desktop" / "integrated_selection_products.csv",
+            Path.cwd() / "structured_snacks_data_with_random_sales.csv",
+        ])
 
         for candidate in candidates:
             if candidate.exists():
                 return candidate.resolve()
-        raise FileNotFoundError("未找到 integrated_selection_products.csv 或 structured_snacks_data.csv，请放在项目目录或桌面。")
+        raise FileNotFoundError("未找到 integrated_selection_products.csv，请放在项目目录或桌面。")
 
     @staticmethod
     def _load_csv(path: Path) -> pd.DataFrame:

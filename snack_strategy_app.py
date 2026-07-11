@@ -18,25 +18,27 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+PROJECT_DIR = Path(r"C:\Users\HUAWEI\Documents\New project 2")
 DATA_CANDIDATES = [
-    Path("integrated_selection_products.csv"),
-    Path("structured_snacks_data_with_random_sales.csv"),
-    Path("cleaned_snacks_data.csv"),
+    PROJECT_DIR / "integrated_selection_products.csv",
+    PROJECT_DIR / "structured_snacks_data_with_random_sales.csv",
+    PROJECT_DIR / "cleaned_snacks_data.csv",
 ]
-MERGED_CANDIDATES = [Path("merged_products.csv"), Path("final_products.csv")]
-JD_CRAWL_DIR = Path("数据") / "京东评论爬取"
-REVIEWS_CANDIDATES = [JD_CRAWL_DIR / "negative_reviews.csv", Path("negative_reviews.csv")]
-PRODUCT_REVIEWS_CANDIDATES = [JD_CRAWL_DIR / "product_reviews.csv", Path("product_reviews.csv")]
-PRODUCT_DETAILS_CANDIDATES = [JD_CRAWL_DIR / "product_details.csv", Path("product_details.csv")]
-JD_CHECKPOINT_CANDIDATES = [JD_CRAWL_DIR / "crawled_items.csv", Path("crawled_items.csv")]
-PRICE_HISTORY_CANDIDATES = [Path("price_history.csv")]
-PRICE_CHECKPOINT_CANDIDATES = [Path("crawled_price_items.csv")]
-LOG_DIR = Path("logs")
-SNAPSHOT_DIR = Path("snapshots")
+MERGED_CANDIDATES = [PROJECT_DIR / "merged_products.csv", PROJECT_DIR / "final_products.csv"]
+JD_CRAWL_DIR = PROJECT_DIR / "数据" / "京东评论爬取"
+REVIEWS_CANDIDATES = [JD_CRAWL_DIR / "negative_reviews.csv", PROJECT_DIR / "negative_reviews.csv"]
+PRODUCT_REVIEWS_CANDIDATES = [JD_CRAWL_DIR / "product_reviews.csv", PROJECT_DIR / "product_reviews.csv"]
+PRODUCT_DETAILS_CANDIDATES = [JD_CRAWL_DIR / "product_details.csv", PROJECT_DIR / "product_details.csv"]
+JD_CHECKPOINT_CANDIDATES = [JD_CRAWL_DIR / "crawled_items.csv", PROJECT_DIR / "crawled_items.csv"]
+PRICE_HISTORY_CANDIDATES = [PROJECT_DIR / "price_history.csv"]
+PRICE_CHECKPOINT_CANDIDATES = [PROJECT_DIR / "crawled_price_items.csv"]
+LOG_DIR = PROJECT_DIR / "logs"
+SNAPSHOT_DIR = PROJECT_DIR / "snapshots"
 BASELINE_STATS_PATH = SNAPSHOT_DIR / "baseline_category_stats.csv"
 BASELINE_REPORT_PATH = SNAPSHOT_DIR / "baseline_report.md"
 TREND_TIMESERIES_PATH = SNAPSHOT_DIR / "trend_timeseries.csv"
-QUALITY_REPORT_PATH = Path("selection_data_quality_report.json")
+QUALITY_REPORT_PATH = PROJECT_DIR / "selection_data_quality_report.json"
+SINGLE_PRODUCT_APP_URL = "http://localhost:8502"
 SINGLE_PRODUCT_APP_URL = "http://localhost:8502"
 
 

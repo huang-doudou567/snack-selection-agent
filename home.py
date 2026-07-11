@@ -67,6 +67,46 @@ with col2:
     """)
 
 st.divider()
+st.subheader("🔧 工具 & 配置")
+
+col3, col4, col5 = st.columns(3)
+with col3:
+    st.markdown("""
+    ## ⚙️ Prompt 配置
+
+    在线编辑 6 场景 System Prompt：
+    - 选品 / 清仓 / 竞品对比
+    - 促销策略 / 差评归因 / 月度进货
+    - 保存即生效，无需重启
+
+    👉 **[打开 Prompt 配置](http://localhost:8503)**
+    """)
+with col4:
+    st.markdown("""
+    ## 📋 决策追踪
+
+    记录每次选品决策：
+    - 建议 vs 实际选择
+    - 预期 vs 实际效果
+    - 3 个月后自动提醒回看
+    - 偏差归因分析
+
+    👉 **[打开决策追踪](http://localhost:8504)**
+    """)
+with col5:
+    st.markdown("""
+    ## 💬 AI 选品助手
+
+    对话式选品决策：
+    - 直接聊天提问
+    - AI 实时分析品类数据
+    - 流式回复体验
+    - 基于真实 CSV 数据
+
+    👉 **[打开 AI 助手](http://localhost:5173)**
+    """)
+
+st.divider()
 
 import os, time as _t
 def _m(p):

@@ -67,6 +67,7 @@ jd_snacks_market_insight/
 数据/
 
 # ── 系统 ──
+archive/
 .DS_Store
 Thumbs.db
 .idea/
