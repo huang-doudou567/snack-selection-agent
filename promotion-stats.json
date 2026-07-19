@@ -1,0 +1,13 @@
+{
+  "hasPromo": 39,
+  "noPromo": 13395,
+  "promoAvgSales": 10658,
+  "noPromoAvgSales": 113332,
+  "promoProductsPct": 0.3,
+  "topKeywords": [
+    { "word": "包邮", "count": 57 },
+    { "word": "特价", "count": 9 },
+    { "word": "直降", "count": 2 },
+    { "word": "满减", "count": 1 }
+  ]
+}
